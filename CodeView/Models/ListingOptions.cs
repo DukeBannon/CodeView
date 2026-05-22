@@ -14,6 +14,10 @@ public sealed class ListingOptions
 
     public bool UseSyntaxHighlighting { get; set; } = true;
 
+    public ListingStylePreset StylePreset { get; set; } = ListingStylePreset.CleanBinder;
+
+    public LineWrapMode LineWrapMode { get; set; } = LineWrapMode.Wrap;
+
     public ListingOptions Clone()
     {
         return new ListingOptions
@@ -23,7 +27,9 @@ public sealed class ListingOptions
             IncludeTodoIndex = IncludeTodoIndex,
             IncludeSourceListing = IncludeSourceListing,
             PageBreakBetweenFiles = PageBreakBetweenFiles,
-            UseSyntaxHighlighting = UseSyntaxHighlighting
+            UseSyntaxHighlighting = UseSyntaxHighlighting,
+            StylePreset = StylePreset,
+            LineWrapMode = LineWrapMode
         };
     }
 }

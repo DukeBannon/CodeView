@@ -56,6 +56,8 @@ public sealed class HtmlListingGenerator
     private static string GetCss(ListingOptions options)
     {
         var fileBreak = options.PageBreakBetweenFiles ? "break-before: page; page-break-before: always;" : "";
+        var styleCss = GetStyleCss(options.StylePreset);
+        var lineWrapCss = GetLineWrapCss(options.LineWrapMode);
 
         return $$"""
             @page {
@@ -68,6 +70,13 @@ public sealed class HtmlListingGenerator
                 background: #f4f1ea;
                 font-family: "Segoe UI", Arial, sans-serif;
                 font-size: 14px;
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+            }
+
+            * {
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
             }
 
             body {
@@ -217,9 +226,7 @@ public sealed class HtmlListingGenerator
             .code {
                 padding-left: 12px;
                 min-width: 0;
-                white-space: pre-wrap;
-                overflow-wrap: anywhere;
-                word-break: break-word;
+                {{lineWrapCss}}
             }
 
             .hljs-keyword {
@@ -257,23 +264,84 @@ public sealed class HtmlListingGenerator
                 color: #4b5560;
             }
 
+            {{styleCss}}
+
             @media print {
                 body {
                     padding: 0;
-                    background: white;
                 }
 
                 .sheet {
                     max-width: none;
                     margin: 0;
                     padding: 0;
-                    border: 0;
                     box-shadow: none;
                     break-after: page;
                     page-break-after: always;
                 }
             }
             """;
+    }
+
+    private static string GetStyleCss(ListingStylePreset stylePreset)
+    {
+        return stylePreset switch
+        {
+            ListingStylePreset.ClassicCompiler => """
+                body { background: #ece8dc; }
+                .sheet { background: #fffdf2; border-color: #57534a; box-shadow: none; }
+                h1, h2, h3 { font-family: Consolas, "Courier New", monospace; text-transform: uppercase; }
+                .file-header { background: #d8d2c2; border-color: #222; }
+                .source { background: #fffdf2; border-color: #777166; }
+                th { background: #d8d2c2; }
+                """,
+            ListingStylePreset.Greenbar => """
+                body { background: #eef3ec; }
+                .sheet { background: #fbfff8; border-color: #8fa58a; }
+                .file-header { background: #dcebd6; border-color: #45633e; }
+                .source { background: #fbfff8; border-color: #aabfa3; }
+                .source-line:nth-child(6n+1),
+                .source-line:nth-child(6n+2),
+                .source-line:nth-child(6n+3) { background: #f4faef; }
+                .source-line:nth-child(6n+4),
+                .source-line:nth-child(6n+5),
+                .source-line:nth-child(6n+6) { background: #ffffff; }
+                th { background: #dcebd6; }
+                """,
+            ListingStylePreset.DenseReview => """
+                body { padding: 18px; background: #f3f3ef; }
+                .sheet { max-width: 1280px; padding: 28px 34px; background: #fffef8; }
+                h1 { font-size: 28px; }
+                h2 { font-size: 18px; }
+                .source { font-size: 11px; line-height: 1.18; }
+                .source-line { grid-template-columns: 66px minmax(0, 1fr); min-height: 13px; }
+                .file-header { margin-top: 16px; padding: 8px 10px; }
+                th, td { padding: 5px 6px; }
+                """,
+            _ => string.Empty
+        };
+    }
+
+    private static string GetLineWrapCss(LineWrapMode lineWrapMode)
+    {
+        return lineWrapMode switch
+        {
+            LineWrapMode.Truncate => """
+                display: block;
+                white-space: pre;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                """,
+            LineWrapMode.Continuation => """
+                white-space: pre;
+                overflow: hidden;
+                """,
+            _ => """
+                white-space: pre-wrap;
+                overflow-wrap: anywhere;
+                word-break: break-word;
+                """
+        };
     }
 
     private static void AppendTitlePage(StringBuilder html, ScanResult scanResult)
@@ -395,13 +463,21 @@ public sealed class HtmlListingGenerator
 
             for (var lineIndex = 0; lineIndex < file.Lines.Count; lineIndex++)
             {
-                html.Append("<div class=\"source-line\"><span class=\"line-number\">");
-                html.Append($"{lineIndex + 1:000000}");
-                html.Append("</span><span class=\"code\">");
-                html.Append(options.UseSyntaxHighlighting
-                    ? SimpleSyntaxHighlighter.Highlight(file.Lines[lineIndex], file.Extension)
-                    : Encode(file.Lines[lineIndex]));
-                html.AppendLine("</span></div>");
+                var renderedLines = GetRenderedSourceLines(file.Lines[lineIndex], options.LineWrapMode);
+
+                for (var segmentIndex = 0; segmentIndex < renderedLines.Count; segmentIndex++)
+                {
+                    var renderedLine = renderedLines[segmentIndex];
+                    var lineNumber = segmentIndex == 0 ? $"{lineIndex + 1:000000}" : "  ....";
+
+                    html.Append("<div class=\"source-line\"><span class=\"line-number\">");
+                    html.Append(lineNumber);
+                    html.Append("</span><span class=\"code\">");
+                    html.Append(options.UseSyntaxHighlighting
+                        ? SimpleSyntaxHighlighter.Highlight(renderedLine, file.Extension)
+                        : Encode(renderedLine));
+                    html.AppendLine("</span></div>");
+                }
             }
 
             html.AppendLine("</div>");
@@ -481,6 +557,30 @@ public sealed class HtmlListingGenerator
     private static string GetFileAnchor(int index)
     {
         return $"file-{index + 1:0000}";
+    }
+
+    private static IReadOnlyList<string> GetRenderedSourceLines(string line, LineWrapMode lineWrapMode)
+    {
+        const int continuationWidth = 116;
+
+        if (lineWrapMode != LineWrapMode.Continuation || line.Length <= continuationWidth)
+        {
+            return [line];
+        }
+
+        var lines = new List<string>();
+        var remaining = line;
+        var isContinuation = false;
+
+        while (remaining.Length > continuationWidth)
+        {
+            lines.Add((isContinuation ? ">> " : string.Empty) + remaining[..continuationWidth]);
+            remaining = remaining[continuationWidth..];
+            isContinuation = true;
+        }
+
+        lines.Add(">> " + remaining);
+        return lines;
     }
 
     private static void AppendGitMetadata(StringBuilder html, ScanResult scanResult)

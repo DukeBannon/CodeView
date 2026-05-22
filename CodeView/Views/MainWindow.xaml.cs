@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using CodeView.ViewModels;
+using Microsoft.Web.WebView2.Core;
 using Microsoft.Win32;
 
 namespace CodeView.Views;
@@ -73,7 +74,7 @@ public partial class MainWindow : Window
 
         try
         {
-            await PreviewBrowser.CoreWebView2.ExecuteScriptAsync("window.print();");
+            PreviewBrowser.CoreWebView2.ShowPrintUI(CoreWebView2PrintDialogKind.Browser);
             _viewModel.SetStatusMessage("Print dialog opened.");
         }
         catch (Exception ex)
@@ -109,7 +110,11 @@ public partial class MainWindow : Window
 
         try
         {
-            var success = await PreviewBrowser.CoreWebView2.PrintToPdfAsync(dialog.FileName);
+            var printSettings = PreviewBrowser.CoreWebView2.Environment.CreatePrintSettings();
+            printSettings.ShouldPrintBackgrounds = true;
+            printSettings.ShouldPrintHeaderAndFooter = false;
+
+            var success = await PreviewBrowser.CoreWebView2.PrintToPdfAsync(dialog.FileName, printSettings);
             _viewModel.SetStatusMessage(success
                 ? $"PDF exported to {dialog.FileName}"
                 : "PDF export was canceled or did not complete.");

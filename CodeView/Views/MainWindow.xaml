@@ -65,7 +65,7 @@
 
         <Grid Grid.Row="1" Margin="18">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="360" />
+                <ColumnDefinition Width="430" />
                 <ColumnDefinition Width="18" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
@@ -89,6 +89,19 @@
                         <Button Click="OnExportPdfClick" Content="Export PDF" />
                         <Button Command="{Binding ExportHtmlCommand}" Content="Export HTML" />
                         <Button Command="{Binding ExportTextCommand}" Content="Export Text" />
+                        <Grid Margin="0,4,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0"
+                                    Command="{Binding IncludeAllFilesCommand}"
+                                    Content="Include All" />
+                            <Button Grid.Column="2"
+                                    Command="{Binding ExcludeAllFilesCommand}"
+                                    Content="Exclude All" />
+                        </Grid>
                         <TextBlock Text="File Inventory"
                                    Margin="0,10,0,8"
                                    FontWeight="SemiBold"
@@ -101,7 +114,15 @@
                               Background="#FFFDF7">
                         <ListView.View>
                             <GridView>
-                                <GridViewColumn Header="Relative Path" Width="245">
+                                <GridViewColumn Header="Use" Width="48">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate DataType="{x:Type models:SourceFileInfo}">
+                                            <CheckBox HorizontalAlignment="Center"
+                                                      IsChecked="{Binding IsIncluded, UpdateSourceTrigger=PropertyChanged}" />
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="Relative Path" Width="265">
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate DataType="{x:Type models:SourceFileInfo}">
                                             <TextBlock Text="{Binding RelativePath}"
@@ -133,6 +154,14 @@
                                 <Run Text="Total lines: " />
                                 <Run Text="{Binding TotalLines, Mode=OneWay}" FontWeight="SemiBold" />
                             </TextBlock>
+                            <TextBlock Margin="0,8,0,0">
+                                <Run Text="Included files: " />
+                                <Run Text="{Binding IncludedFiles, Mode=OneWay}" FontWeight="SemiBold" />
+                            </TextBlock>
+                            <TextBlock>
+                                <Run Text="Included lines: " />
+                                <Run Text="{Binding IncludedLines, Mode=OneWay}" FontWeight="SemiBold" />
+                            </TextBlock>
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -159,6 +188,16 @@
                                        FontWeight="SemiBold"
                                        Foreground="#242B33" />
                             <WrapPanel>
+                                <StackPanel Width="180" Margin="0,0,18,6">
+                                    <TextBlock Text="Style preset" FontSize="12" FontWeight="SemiBold" />
+                                    <ComboBox ItemsSource="{Binding StylePresets}"
+                                              SelectedItem="{Binding SelectedStylePreset}" />
+                                </StackPanel>
+                                <StackPanel Width="160" Margin="0,0,18,6">
+                                    <TextBlock Text="Line wrap" FontSize="12" FontWeight="SemiBold" />
+                                    <ComboBox ItemsSource="{Binding LineWrapModes}"
+                                              SelectedItem="{Binding SelectedLineWrapMode}" />
+                                </StackPanel>
                                 <CheckBox Content="Include title page"
                                           IsChecked="{Binding IncludeTitlePage}" />
                                 <CheckBox Content="Include file inventory"

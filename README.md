@@ -8,7 +8,10 @@ CodeView is a local Windows desktop utility for generating traditional formatted
 - Recursively scan supported source and text files.
 - Exclude common build, IDE, dependency, and generated/user files.
 - Show a file inventory with relative paths and line counts.
+- Include or exclude individual scanned files before generating output.
 - Generate an HTML preview with a title page, clickable table of contents, project summary, inventory, source listing, TODO/FIXME index, cross-reference placeholder, and generation metadata.
+- Choose listing style presets: Clean Binder, Classic Compiler, Greenbar, or Dense Review.
+- Choose line handling: Wrap, Truncate, or Continuation markers.
 - Optionally apply local Highlight.js-style syntax highlighting for common prototype file types, including C#, XML/XAML, JSON, SQL, COBOL, Pascal/Delphi, DFM, and assembly.
 - Include Git branch, commit, and dirty/clean status when the selected repository is a Git repo.
 - Export the listing as HTML, PDF, or plain text.
@@ -35,6 +38,7 @@ dotnet run --project CodeView\CodeView.csproj
 - Repository path is stored in memory only.
 - Cross-reference output is a planned placeholder only.
 - Source file ordering is simple relative-path sorting.
+- File include/exclude selections are in-memory only and reset when rescanning.
 - Very large repositories may take time to scan and render in the prototype UI.
 
 ## Planned Features
@@ -42,4 +46,5 @@ dotnet run --project CodeView\CodeView.csproj
 - Basic cross-reference
 - C# Roslyn-based cross-reference
 - COBOL/Pascal symbol scanning
-- Greenbar and Classic Compiler output styles
+- Persistent project profiles
+- Smarter file grouping and ordering

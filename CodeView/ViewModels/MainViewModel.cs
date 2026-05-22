@@ -27,6 +27,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private bool _includeSourceListing = true;
     private bool _pageBreakBetweenFiles = true;
     private bool _useSyntaxHighlighting = true;
+    private ListingStylePreset _selectedStylePreset = ListingStylePreset.CleanBinder;
+    private LineWrapMode _selectedLineWrapMode = LineWrapMode.Wrap;
 
     public MainViewModel()
         : this(new UserDialogService())
@@ -41,11 +43,17 @@ public sealed class MainViewModel : INotifyPropertyChanged
         GeneratePreviewCommand = new RelayCommand(GeneratePreview, HasScanResult);
         ExportHtmlCommand = new RelayCommand(ExportHtml, HasScanResult);
         ExportTextCommand = new RelayCommand(ExportText, HasScanResult);
+        IncludeAllFilesCommand = new RelayCommand(IncludeAllFiles, HasScanResult);
+        ExcludeAllFilesCommand = new RelayCommand(ExcludeAllFiles, HasScanResult);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public ObservableCollection<SourceFileInfo> Files { get; } = [];
+
+    public IReadOnlyList<ListingStylePreset> StylePresets { get; } = Enum.GetValues<ListingStylePreset>();
+
+    public IReadOnlyList<LineWrapMode> LineWrapModes { get; } = Enum.GetValues<LineWrapMode>();
 
     public ICommand OpenRepoCommand { get; }
 
@@ -56,6 +64,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ICommand ExportHtmlCommand { get; }
 
     public ICommand ExportTextCommand { get; }
+
+    public ICommand IncludeAllFilesCommand { get; }
+
+    public ICommand ExcludeAllFilesCommand { get; }
 
     public string? SelectedRepositoryPath
     {
@@ -137,9 +149,25 @@ public sealed class MainViewModel : INotifyPropertyChanged
         set => SetOption(ref _useSyntaxHighlighting, value);
     }
 
+    public ListingStylePreset SelectedStylePreset
+    {
+        get => _selectedStylePreset;
+        set => SetOption(ref _selectedStylePreset, value);
+    }
+
+    public LineWrapMode SelectedLineWrapMode
+    {
+        get => _selectedLineWrapMode;
+        set => SetOption(ref _selectedLineWrapMode, value);
+    }
+
     public int TotalFiles => _scanResult?.TotalFiles ?? 0;
 
     public int TotalLines => _scanResult?.TotalLines ?? 0;
+
+    public int IncludedFiles => Files.Count(file => file.IsIncluded);
+
+    public int IncludedLines => Files.Where(file => file.IsIncluded).Sum(file => file.LineCount);
 
     public void SetStatusMessage(string message)
     {
@@ -172,15 +200,23 @@ public sealed class MainViewModel : INotifyPropertyChanged
             StatusMessage = "Scanning repository...";
 
             _scanResult = await _scanner.ScanAsync(SelectedRepositoryPath);
+            foreach (var file in Files)
+            {
+                file.PropertyChanged -= OnSourceFilePropertyChanged;
+            }
+
             Files.Clear();
 
             foreach (var file in _scanResult.Files)
             {
+                file.PropertyChanged += OnSourceFilePropertyChanged;
                 Files.Add(file);
             }
 
             OnPropertyChanged(nameof(TotalFiles));
             OnPropertyChanged(nameof(TotalLines));
+            OnPropertyChanged(nameof(IncludedFiles));
+            OnPropertyChanged(nameof(IncludedLines));
             PreviewHtml = BuildScanCompleteHtml(TotalFiles, TotalLines);
             StatusMessage = $"Scan complete: {TotalFiles:N0} files, {TotalLines:N0} lines. Click Generate Preview to render the listing.";
         }
@@ -206,7 +242,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         try
         {
             StatusMessage = "Generating preview...";
-            PreviewHtml = _htmlGenerator.Generate(_scanResult, GetOptions());
+            PreviewHtml = _htmlGenerator.Generate(GetIncludedScanResult(), GetOptions());
             StatusMessage = $"Preview generated at {DateTime.Now:t}.";
         }
         catch (Exception ex)
@@ -230,7 +266,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
         try
         {
-            var html = _htmlGenerator.Generate(_scanResult, GetOptions());
+            var html = _htmlGenerator.Generate(GetIncludedScanResult(), GetOptions());
             File.WriteAllText(fileName, html);
             StatusMessage = $"HTML exported to {fileName}";
         }
@@ -255,7 +291,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
         try
         {
-            var text = _textGenerator.Generate(_scanResult, GetOptions());
+            var text = _textGenerator.Generate(GetIncludedScanResult(), GetOptions());
             File.WriteAllText(fileName, text);
             StatusMessage = $"Text exported to {fileName}";
         }
@@ -274,7 +310,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
             IncludeTodoIndex = IncludeTodoIndex,
             IncludeSourceListing = IncludeSourceListing,
             PageBreakBetweenFiles = PageBreakBetweenFiles,
-            UseSyntaxHighlighting = UseSyntaxHighlighting
+            UseSyntaxHighlighting = UseSyntaxHighlighting,
+            StylePreset = SelectedStylePreset,
+            LineWrapMode = SelectedLineWrapMode
         };
     }
 
@@ -299,7 +337,71 @@ public sealed class MainViewModel : INotifyPropertyChanged
         return !IsBusy && _scanResult is not null;
     }
 
-    private void SetOption(ref bool field, bool value, [CallerMemberName] string? propertyName = null)
+    private ScanResult GetIncludedScanResult()
+    {
+        if (_scanResult is null)
+        {
+            throw new InvalidOperationException("Scan a repository before generating output.");
+        }
+
+        var includedFiles = _scanResult.Files
+            .Where(file => file.IsIncluded)
+            .ToList();
+        var includedPaths = includedFiles
+            .Select(file => file.RelativePath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return new ScanResult
+        {
+            RepositoryPath = _scanResult.RepositoryPath,
+            GeneratedAt = _scanResult.GeneratedAt,
+            GitInfo = _scanResult.GitInfo,
+            Files = includedFiles,
+            TodoItems = _scanResult.TodoItems
+                .Where(item => includedPaths.Contains(item.RelativePath))
+                .ToList()
+        };
+    }
+
+    private void IncludeAllFiles()
+    {
+        SetAllFilesIncluded(true);
+    }
+
+    private void ExcludeAllFiles()
+    {
+        SetAllFilesIncluded(false);
+    }
+
+    private void SetAllFilesIncluded(bool isIncluded)
+    {
+        foreach (var file in Files)
+        {
+            file.IsIncluded = isIncluded;
+        }
+
+        RefreshIncludedSummary();
+        if (_scanResult is not null)
+        {
+            GeneratePreview();
+        }
+    }
+
+    private void OnSourceFilePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SourceFileInfo.IsIncluded))
+        {
+            RefreshIncludedSummary();
+        }
+    }
+
+    private void RefreshIncludedSummary()
+    {
+        OnPropertyChanged(nameof(IncludedFiles));
+        OnPropertyChanged(nameof(IncludedLines));
+    }
+
+    private void SetOption<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
         if (SetField(ref field, value, propertyName) && _scanResult is not null)
         {
@@ -369,6 +471,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         ((RelayCommand)GeneratePreviewCommand).RaiseCanExecuteChanged();
         ((RelayCommand)ExportHtmlCommand).RaiseCanExecuteChanged();
         ((RelayCommand)ExportTextCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)IncludeAllFilesCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)ExcludeAllFilesCommand).RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(SelectedRepositoryDisplay));
     }
 

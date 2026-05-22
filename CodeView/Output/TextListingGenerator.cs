@@ -92,7 +92,13 @@ public sealed class TextListingGenerator
 
             for (var lineIndex = 0; lineIndex < file.Lines.Count; lineIndex++)
             {
-                text.AppendLine($"{lineIndex + 1:000000}  {file.Lines[lineIndex]}");
+                var renderedLines = GetRenderedSourceLines(file.Lines[lineIndex], options.LineWrapMode);
+
+                for (var segmentIndex = 0; segmentIndex < renderedLines.Count; segmentIndex++)
+                {
+                    var lineNumber = segmentIndex == 0 ? $"{lineIndex + 1:000000}" : "  ....";
+                    text.AppendLine($"{lineNumber}  {renderedLines[segmentIndex]}");
+                }
             }
 
             text.AppendLine();
@@ -135,5 +141,34 @@ public sealed class TextListingGenerator
         text.AppendLine($"Git Branch: {scanResult.GitInfo.BranchName ?? "Unknown"}");
         text.AppendLine($"Git Commit: {scanResult.GitInfo.CommitHash ?? "Unknown"}");
         text.AppendLine($"Git Status: {scanResult.GitInfo.DirtyStatus}");
+    }
+
+    private static IReadOnlyList<string> GetRenderedSourceLines(string line, LineWrapMode lineWrapMode)
+    {
+        const int continuationWidth = 116;
+
+        if (lineWrapMode == LineWrapMode.Truncate && line.Length > continuationWidth)
+        {
+            return [line[..(continuationWidth - 3)] + "..."];
+        }
+
+        if (lineWrapMode != LineWrapMode.Continuation || line.Length <= continuationWidth)
+        {
+            return [line];
+        }
+
+        var lines = new List<string>();
+        var remaining = line;
+        var isContinuation = false;
+
+        while (remaining.Length > continuationWidth)
+        {
+            lines.Add((isContinuation ? ">> " : string.Empty) + remaining[..continuationWidth]);
+            remaining = remaining[continuationWidth..];
+            isContinuation = true;
+        }
+
+        lines.Add(">> " + remaining);
+        return lines;
     }
 }
