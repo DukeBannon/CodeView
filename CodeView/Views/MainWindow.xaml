@@ -85,6 +85,8 @@
                     <StackPanel Grid.Row="0">
                         <Button Command="{Binding ScanRepoCommand}" Content="Scan Repo" />
                         <Button Command="{Binding GeneratePreviewCommand}" Content="Generate Preview" />
+                        <Button Click="OnPrintPreviewClick" Content="Print Preview" />
+                        <Button Click="OnExportPdfClick" Content="Export PDF" />
                         <Button Command="{Binding ExportHtmlCommand}" Content="Export HTML" />
                         <Button Command="{Binding ExportTextCommand}" Content="Export Text" />
                         <TextBlock Text="File Inventory"

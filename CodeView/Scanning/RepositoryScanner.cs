@@ -1,4 +1,5 @@
 using CodeView.Models;
+using System.Diagnostics;
 using System.IO;
 
 namespace CodeView.Scanning;
@@ -88,6 +89,7 @@ public sealed class RepositoryScanner
         {
             RepositoryPath = root,
             GeneratedAt = DateTimeOffset.Now,
+            GitInfo = ReadGitInfo(root),
             Files = files,
             TodoItems = todoItems
         };
@@ -186,6 +188,63 @@ public sealed class RepositoryScanner
                 Keyword = keyword,
                 Text = line.Trim()
             };
+        }
+    }
+
+    private static GitRepositoryInfo ReadGitInfo(string repositoryPath)
+    {
+        var root = RunGit(repositoryPath, "rev-parse --show-toplevel");
+        if (string.IsNullOrWhiteSpace(root))
+        {
+            return new GitRepositoryInfo();
+        }
+
+        var branch = RunGit(repositoryPath, "branch --show-current");
+        if (string.IsNullOrWhiteSpace(branch))
+        {
+            branch = RunGit(repositoryPath, "rev-parse --short HEAD");
+        }
+
+        var commit = RunGit(repositoryPath, "rev-parse --short HEAD");
+        var status = RunGit(repositoryPath, "status --porcelain");
+
+        return new GitRepositoryInfo
+        {
+            RootPath = root,
+            BranchName = branch,
+            CommitHash = commit,
+            IsDirty = status is not null ? status.Length > 0 : null
+        };
+    }
+
+    private static string? RunGit(string workingDirectory, string arguments)
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "git",
+                Arguments = arguments,
+                WorkingDirectory = workingDirectory,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+
+            if (process is null)
+            {
+                return null;
+            }
+
+            var output = process.StandardOutput.ReadToEnd().Trim();
+            process.WaitForExit(1500);
+
+            return process.ExitCode == 0 ? output : null;
+        }
+        catch
+        {
+            return null;
         }
     }
 }

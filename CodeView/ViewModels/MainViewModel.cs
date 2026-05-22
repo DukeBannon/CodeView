@@ -141,6 +141,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public int TotalLines => _scanResult?.TotalLines ?? 0;
 
+    public void SetStatusMessage(string message)
+    {
+        StatusMessage = message;
+    }
+
     private void OpenRepository()
     {
         var selectedPath = _dialogService.ChooseRepositoryFolder(SelectedRepositoryPath);

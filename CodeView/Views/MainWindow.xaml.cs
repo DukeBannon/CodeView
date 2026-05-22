@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using CodeView.ViewModels;
+using Microsoft.Win32;
 
 namespace CodeView.Views;
 
@@ -60,6 +61,68 @@ public partial class MainWindow : Window
         }
 
         PreviewBrowser.NavigateToString(html);
+    }
+
+    private async void OnPrintPreviewClick(object sender, RoutedEventArgs e)
+    {
+        if (!_webViewReady || PreviewBrowser.CoreWebView2 is null)
+        {
+            _viewModel.SetStatusMessage("Preview is not ready to print yet.");
+            return;
+        }
+
+        try
+        {
+            await PreviewBrowser.CoreWebView2.ExecuteScriptAsync("window.print();");
+            _viewModel.SetStatusMessage("Print dialog opened.");
+        }
+        catch (Exception ex)
+        {
+            _viewModel.SetStatusMessage($"Print failed: {ex.Message}");
+            System.Windows.MessageBox.Show(
+                ex.Message,
+                "Print failed",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private async void OnExportPdfClick(object sender, RoutedEventArgs e)
+    {
+        if (!_webViewReady || PreviewBrowser.CoreWebView2 is null)
+        {
+            _viewModel.SetStatusMessage("Preview is not ready to export as PDF yet.");
+            return;
+        }
+
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Export PDF Listing",
+            Filter = "PDF files (*.pdf)|*.pdf|All files (*.*)|*.*",
+            FileName = "CodeView-listing.pdf"
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            var success = await PreviewBrowser.CoreWebView2.PrintToPdfAsync(dialog.FileName);
+            _viewModel.SetStatusMessage(success
+                ? $"PDF exported to {dialog.FileName}"
+                : "PDF export was canceled or did not complete.");
+        }
+        catch (Exception ex)
+        {
+            _viewModel.SetStatusMessage($"PDF export failed: {ex.Message}");
+            System.Windows.MessageBox.Show(
+                ex.Message,
+                "PDF export failed",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 
     private static string GetWelcomeHtml()

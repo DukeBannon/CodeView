@@ -19,6 +19,7 @@ public sealed class TextListingGenerator
         text.AppendLine($"Generated:  {scanResult.GeneratedAt:f}");
         text.AppendLine($"Files:      {scanResult.TotalFiles:N0}");
         text.AppendLine($"Lines:      {scanResult.TotalLines:N0}");
+        AppendGitMetadata(text, scanResult);
         text.AppendLine();
 
         if (options.IncludeFileInventory)
@@ -52,6 +53,7 @@ public sealed class TextListingGenerator
         text.AppendLine($"Generated:  {scanResult.GeneratedAt:f}");
         text.AppendLine($"Files:      {scanResult.TotalFiles:N0}");
         text.AppendLine($"Lines:      {scanResult.TotalLines:N0}");
+        AppendGitMetadata(text, scanResult);
         text.AppendLine();
         text.AppendLine();
     }
@@ -120,5 +122,18 @@ public sealed class TextListingGenerator
     {
         text.AppendLine(title);
         text.AppendLine(new string('=', title.Length));
+    }
+
+    private static void AppendGitMetadata(StringBuilder text, ScanResult scanResult)
+    {
+        if (!scanResult.GitInfo.IsRepository)
+        {
+            text.AppendLine("Git:        Not detected");
+            return;
+        }
+
+        text.AppendLine($"Git Branch: {scanResult.GitInfo.BranchName ?? "Unknown"}");
+        text.AppendLine($"Git Commit: {scanResult.GitInfo.CommitHash ?? "Unknown"}");
+        text.AppendLine($"Git Status: {scanResult.GitInfo.DirtyStatus}");
     }
 }

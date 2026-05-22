@@ -26,6 +26,7 @@ public sealed class HtmlListingGenerator
             AppendTitlePage(html, scanResult);
         }
 
+        AppendTableOfContents(html, scanResult, options);
         AppendSummary(html, scanResult);
 
         if (options.IncludeFileInventory)
@@ -125,6 +126,35 @@ public sealed class HtmlListingGenerator
                 width: 100%;
                 border-collapse: collapse;
                 margin-top: 16px;
+            }
+
+            a {
+                color: #173f6f;
+                text-decoration: none;
+            }
+
+            a:hover {
+                text-decoration: underline;
+            }
+
+            .toc-list {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+                gap: 8px 24px;
+                margin-top: 18px;
+                padding-left: 18px;
+            }
+
+            .toc-files {
+                margin-top: 18px;
+                columns: 2;
+                column-gap: 34px;
+                font-size: 12.5px;
+            }
+
+            .toc-files li {
+                break-inside: avoid;
+                margin-bottom: 4px;
             }
 
             th, td {
@@ -248,7 +278,7 @@ public sealed class HtmlListingGenerator
 
     private static void AppendTitlePage(StringBuilder html, ScanResult scanResult)
     {
-        html.AppendLine("<section class=\"sheet\">");
+        html.AppendLine("<section class=\"sheet\" id=\"title-page\">");
         html.AppendLine("<h1>CodeView</h1>");
         html.AppendLine("<div class=\"subtitle\">Traditional Source Listing Generator</div>");
         html.AppendLine("<div class=\"meta-grid\">");
@@ -256,26 +286,77 @@ public sealed class HtmlListingGenerator
         AppendMeta(html, "Generated", scanResult.GeneratedAt.ToString("f"));
         AppendMeta(html, "Total Files", scanResult.TotalFiles.ToString("N0"));
         AppendMeta(html, "Total Lines", scanResult.TotalLines.ToString("N0"));
+        AppendGitMetadata(html, scanResult);
         html.AppendLine("</div>");
+        html.AppendLine("</section>");
+    }
+
+    private static void AppendTableOfContents(StringBuilder html, ScanResult scanResult, ListingOptions options)
+    {
+        html.AppendLine("<section class=\"sheet\" id=\"table-of-contents\">");
+        html.AppendLine("<h2>Table of Contents</h2>");
+        html.AppendLine("<ol class=\"toc-list\">");
+
+        if (options.IncludeTitlePage)
+        {
+            html.AppendLine("<li><a href=\"#title-page\">Title Page</a></li>");
+        }
+
+        html.AppendLine("<li><a href=\"#project-summary\">Project Summary</a></li>");
+
+        if (options.IncludeFileInventory)
+        {
+            html.AppendLine("<li><a href=\"#file-inventory\">File Inventory</a></li>");
+        }
+
+        if (options.IncludeSourceListing)
+        {
+            html.AppendLine("<li><a href=\"#source-listing\">Source Listing</a></li>");
+        }
+
+        if (options.IncludeTodoIndex)
+        {
+            html.AppendLine("<li><a href=\"#todo-index\">TODO/FIXME Index</a></li>");
+        }
+
+        html.AppendLine("<li><a href=\"#cross-reference\">Cross-Reference - Planned</a></li>");
+        html.AppendLine("<li><a href=\"#generation-metadata\">Generation Metadata</a></li>");
+        html.AppendLine("</ol>");
+
+        if (options.IncludeSourceListing && scanResult.Files.Count > 0)
+        {
+            html.AppendLine("<h3>Files</h3>");
+            html.AppendLine("<ol class=\"toc-files\">");
+
+            for (var i = 0; i < scanResult.Files.Count; i++)
+            {
+                var file = scanResult.Files[i];
+                html.AppendLine($"<li><a href=\"#{GetFileAnchor(i)}\">{i + 1:0000} | {Encode(file.RelativePath)}</a></li>");
+            }
+
+            html.AppendLine("</ol>");
+        }
+
         html.AppendLine("</section>");
     }
 
     private static void AppendSummary(StringBuilder html, ScanResult scanResult)
     {
-        html.AppendLine("<section class=\"sheet\">");
+        html.AppendLine("<section class=\"sheet\" id=\"project-summary\">");
         html.AppendLine("<h2>Project Summary</h2>");
         html.AppendLine("<div class=\"meta-grid\">");
         AppendMeta(html, "Repository", scanResult.RepositoryPath);
         AppendMeta(html, "Files Scanned", scanResult.TotalFiles.ToString("N0"));
         AppendMeta(html, "Source Lines", scanResult.TotalLines.ToString("N0"));
         AppendMeta(html, "TODO/FIXME Items", scanResult.TodoItems.Count.ToString("N0"));
+        AppendGitMetadata(html, scanResult);
         html.AppendLine("</div>");
         html.AppendLine("</section>");
     }
 
     private static void AppendFileInventory(StringBuilder html, ScanResult scanResult)
     {
-        html.AppendLine("<section class=\"sheet\">");
+        html.AppendLine("<section class=\"sheet\" id=\"file-inventory\">");
         html.AppendLine("<h2>File Inventory</h2>");
         html.AppendLine("<table>");
         html.AppendLine("<thead><tr><th>Seq</th><th>Relative Path</th><th>Type</th><th>Lines</th></tr></thead>");
@@ -286,7 +367,7 @@ public sealed class HtmlListingGenerator
             var file = scanResult.Files[i];
             html.AppendLine("<tr>");
             html.AppendLine($"<td>{i + 1:0000}</td>");
-            html.AppendLine($"<td>{Encode(file.RelativePath)}</td>");
+            html.AppendLine($"<td><a href=\"#{GetFileAnchor(i)}\">{Encode(file.RelativePath)}</a></td>");
             html.AppendLine($"<td>{Encode(file.Extension)}</td>");
             html.AppendLine($"<td>{file.LineCount:N0}</td>");
             html.AppendLine("</tr>");
@@ -299,14 +380,14 @@ public sealed class HtmlListingGenerator
 
     private static void AppendSourceListing(StringBuilder html, ScanResult scanResult, ListingOptions options)
     {
-        html.AppendLine("<section class=\"sheet\">");
+        html.AppendLine("<section class=\"sheet\" id=\"source-listing\">");
         html.AppendLine("<h2>Source Listing</h2>");
 
         for (var i = 0; i < scanResult.Files.Count; i++)
         {
             var file = scanResult.Files[i];
             var fileClass = i == 0 ? "file-section first-file" : "file-section";
-            html.AppendLine($"<article class=\"{fileClass}\">");
+            html.AppendLine($"<article class=\"{fileClass}\" id=\"{GetFileAnchor(i)}\">");
             html.AppendLine("<div class=\"file-header\">");
             html.AppendLine($"{i + 1:0000} | {Encode(file.RelativePath)} | Type: {Encode(file.Extension)} | Lines: {file.LineCount:N0}");
             html.AppendLine("</div>");
@@ -332,7 +413,7 @@ public sealed class HtmlListingGenerator
 
     private static void AppendTodoIndex(StringBuilder html, ScanResult scanResult)
     {
-        html.AppendLine("<section class=\"sheet\">");
+        html.AppendLine("<section class=\"sheet\" id=\"todo-index\">");
         html.AppendLine("<h2>TODO/FIXME Index</h2>");
 
         if (scanResult.TodoItems.Count == 0)
@@ -350,7 +431,11 @@ public sealed class HtmlListingGenerator
         {
             html.AppendLine("<tr>");
             html.AppendLine($"<td>{Encode(item.Keyword)}</td>");
-            html.AppendLine($"<td>{Encode(item.RelativePath)}</td>");
+            var fileIndex = scanResult.Files.ToList().FindIndex(file => string.Equals(file.RelativePath, item.RelativePath, StringComparison.OrdinalIgnoreCase));
+            var fileLink = fileIndex >= 0
+                ? $"<a href=\"#{GetFileAnchor(fileIndex)}\">{Encode(item.RelativePath)}</a>"
+                : Encode(item.RelativePath);
+            html.AppendLine($"<td>{fileLink}</td>");
             html.AppendLine($"<td>{item.LineNumber:000000}</td>");
             html.AppendLine($"<td><code>{Encode(item.Text)}</code></td>");
             html.AppendLine("</tr>");
@@ -363,7 +448,7 @@ public sealed class HtmlListingGenerator
 
     private static void AppendCrossReferencePlaceholder(StringBuilder html)
     {
-        html.AppendLine("<section class=\"sheet\">");
+        html.AppendLine("<section class=\"sheet\" id=\"cross-reference\">");
         html.AppendLine("<h2>Cross-Reference - Planned</h2>");
         html.AppendLine("<div class=\"empty-state\">Symbol and usage cross-reference generation is planned for a later prototype.</div>");
         html.AppendLine("</section>");
@@ -371,13 +456,14 @@ public sealed class HtmlListingGenerator
 
     private static void AppendMetadata(StringBuilder html, ScanResult scanResult)
     {
-        html.AppendLine("<section class=\"sheet\">");
+        html.AppendLine("<section class=\"sheet\" id=\"generation-metadata\">");
         html.AppendLine("<h2>Generation Metadata</h2>");
         html.AppendLine("<div class=\"meta-grid\">");
         AppendMeta(html, "Generator", "CodeView Prototype 1");
         AppendMeta(html, "Generated", scanResult.GeneratedAt.ToString("O"));
         AppendMeta(html, "Machine", Environment.MachineName);
         AppendMeta(html, "User", Environment.UserName);
+        AppendGitMetadata(html, scanResult);
         html.AppendLine("</div>");
         html.AppendLine("</section>");
     }
@@ -390,5 +476,23 @@ public sealed class HtmlListingGenerator
     private static string Encode(string value)
     {
         return WebUtility.HtmlEncode(value);
+    }
+
+    private static string GetFileAnchor(int index)
+    {
+        return $"file-{index + 1:0000}";
+    }
+
+    private static void AppendGitMetadata(StringBuilder html, ScanResult scanResult)
+    {
+        if (!scanResult.GitInfo.IsRepository)
+        {
+            AppendMeta(html, "Git", "Not detected");
+            return;
+        }
+
+        AppendMeta(html, "Git Branch", scanResult.GitInfo.BranchName ?? "Unknown");
+        AppendMeta(html, "Git Commit", scanResult.GitInfo.CommitHash ?? "Unknown");
+        AppendMeta(html, "Git Status", scanResult.GitInfo.DirtyStatus);
     }
 }
